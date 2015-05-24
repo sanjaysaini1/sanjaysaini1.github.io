@@ -1,0 +1,87 @@
+---
+title: "Prediction of activity correctness"
+output: html_document
+---
+
+In this document we use machine learning algorithm to recognize, if the activity is performed correctly or incorrectly in a way. Our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har.
+
+##Getting data and Exploratory Analysis
+```{r,cache=TRUE}
+#url=https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv;
+#download.file(url,method="curl");
+training=read.csv("pml-training.csv");
+dim(training);
+
+#url=https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+#download.file(url,method="curl");
+testing=read.csv("pml-testing.csv");
+dim(testing);
+library(caret);
+```
+
+### Partition training data for cross validation
+We partition our training data into train and test data by random subsampling,
+
+```{r,cache=TRUE}
+set.seed(12345);
+inTrain=createDataPartition(training$classe,p=0.8,list = FALSE)
+train1=training[inTrain,]
+test1=training[-inTrain,]
+
+
+```
+
+#### Covariate creation
+We remove the Zero Covariates 
+```{r,cache=TRUE}
+
+train1=train1[,!nearZeroVar(train1,saveMetrics=TRUE)$nzv]
+
+```
+We remove the variables which donot contribute to the classification in classe. We remove variables like X (index),username, timestamps etc. We also remove the columns which have NA value because they will not contribute in predicting the classification.
+
+```{r,cache=TRUE}
+
+train1=train1[,7:ncol(train1)]
+train1=train1[,sapply(train1,function(x)sum(is.na(x))==0)]
+dim(train1)
+```
+
+#### Algorithm and its validation
+ We will use random forest machine learning algorithm on our train1 data and use it to predict values in testing data. We will use randomForest package instead of caret package to run the algorithm as it is tuned and faster in execution than the one in caret package.
+ 
+```{r,cache=TRUE}
+library(randomForest);
+modelFit=randomForest(classe~.,data=train1)
+pred=predict(modelFit,test1)
+modelFit
+confusionMatrix(test1$classe,pred)
+```
+
+We can see from modelFit details that the out of bag error rate is 0.41% which is very small and hence our prediction variables are sufficient to predict the classe classification.This is inbuilt out of sample error rate of the random forest model.
+From the confusion matrix between actual classe in test data and predicted values we infer that the model has a very high accuracy of 99.67% .
+
+The following plot is a plot between the actual classe in the test set and the predicted value from our model. We see majority of the classification is correct.
+
+```{r,cache=TRUE,fig.align="center"}
+confusiontab=table(test1$classe,pred);
+confusionframe=as.data.frame(confusiontab);
+confusionframe=confusionframe[confusionframe$Freq!=0,]
+
+qplot(Var1,pred,color=Freq,size=Freq,data=confusionframe,xlab="classe")
+
+```
+
+From the confusion matrix between sub testing data and the predicted value we can estimate the out of sample error rate for the whole training data.
+```{r,cache=TRUE}
+sum(!(pred==test1$classe))/length(pred)
+
+```
+
+###Aplication on testing data
+
+We then apply the model on the testing data we have to get predicted values for classe variable:
+
+```{r,cache=TRUE}
+predict(modelFit,testing);
+```
